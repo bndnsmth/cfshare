@@ -1,0 +1,2 @@
+# Required in production. Generate a unique value with: openssl rand -hex 32
+UPLOAD_TOKEN=

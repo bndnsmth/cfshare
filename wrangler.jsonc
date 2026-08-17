@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cfshare-worker",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-08-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "secrets": {
+    "required": ["UPLOAD_TOKEN"],
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SHARES",
+        "class_name": "ShareObject",
+      },
+    ],
+  },
+  "exports": {
+    "ShareObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+  "vars": {
+    "DEFAULT_TTL_SECONDS": "3600",
+    "MIN_TTL_SECONDS": "10",
+    "MAX_TTL_SECONDS": "2592000",
+    "MAX_UPLOAD_BYTES": "262144016",
+  },
+}
