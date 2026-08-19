@@ -28,6 +28,7 @@ export interface CryptoMetadata {
 
 export interface CFShareManifest {
   format: typeof CFSHARE_FORMAT;
+  kind?: "file" | "text";
   name: string;
   type: string;
   size: number;
@@ -78,6 +79,10 @@ export interface ShareOptions {
   token?: string;
   onProgress?: ProgressListener;
   retryDelays?: number[];
+}
+
+export interface TextShareOptions extends ShareOptions {
+  name?: string;
 }
 
 export interface ShareResult {

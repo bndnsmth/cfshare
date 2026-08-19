@@ -6,7 +6,7 @@ import { normalizeServerUrl } from "./config";
 import { fetchShare, saveShare } from "./download";
 import { generatePassphrase } from "./passphrase";
 import { parseDuration, SELF_HOSTED_CHUNK_SIZE, uploadToSelfHosted } from "./self-hosted";
-import { createShareBundle } from "./site";
+import { createShareBundle, createTextShareBundle } from "./site";
 import type {
   CFShareBackend,
   CFShareClientOptions,
@@ -18,6 +18,7 @@ import type {
   SavedDownload,
   ShareOptions,
   ShareResult,
+  TextShareOptions,
 } from "./types";
 
 function isOptionalString(value: string | undefined): value is string | undefined {
@@ -45,8 +46,16 @@ export class CFShareClient {
     this.backend = this.server === "drop" ? "drop" : "self-hosted";
   }
 
-  async share(
-    inputPath: string,
+  async share(inputPath: string, options: ShareOptions = {}): Promise<ShareResult> {
+    return this.publish({ inputPath }, options);
+  }
+
+  async shareText(text: string, { name, ...options }: TextShareOptions = {}): Promise<ShareResult> {
+    return this.publish({ text, name }, options);
+  }
+
+  private async publish(
+    input: { inputPath: string } | { text: string; name?: string },
     {
       passphrase,
       ttl,
@@ -54,7 +63,7 @@ export class CFShareClient {
       token = this.token,
       onProgress,
       retryDelays,
-    }: ShareOptions = {},
+    }: ShareOptions,
   ): Promise<ShareResult> {
     const selfHosted = this.backend === "self-hosted";
 
@@ -83,14 +92,24 @@ export class CFShareClient {
     const workDir = await mkdtemp(`${tmpdir()}${sep}cfshare-`);
 
     try {
-      emit(onProgress, "preparing", { inputPath: resolve(inputPath) });
+      const inputPath = "inputPath" in input ? resolve(input.inputPath) : undefined;
+      emit(onProgress, "preparing", inputPath ? { inputPath } : {});
 
-      const metadata = await createShareBundle({
-        inputPath: resolve(inputPath),
-        outputDir: workDir,
-        passphrase: effectivePassphrase,
-        chunkSize: selfHosted ? SELF_HOSTED_CHUNK_SIZE : undefined,
-      });
+      const metadata =
+        "inputPath" in input
+          ? await createShareBundle({
+              inputPath: resolve(input.inputPath),
+              outputDir: workDir,
+              passphrase: effectivePassphrase,
+              chunkSize: selfHosted ? SELF_HOSTED_CHUNK_SIZE : undefined,
+            })
+          : await createTextShareBundle({
+              text: input.text,
+              name: input.name,
+              outputDir: workDir,
+              passphrase: effectivePassphrase,
+              chunkSize: selfHosted ? SELF_HOSTED_CHUNK_SIZE : undefined,
+            });
 
       emit(onProgress, "prepared", { metadata });
 

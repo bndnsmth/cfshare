@@ -1,13 +1,20 @@
 # ☁️ cfshare
 
-> **Send an encrypted file or folder with one command.**
+> **Send encrypted files, folders, or plain text with one command.**
 >
 > Zero-configuration file handoffs for humans and coding agents.
 
-`cfshare` encrypts your file locally and publishes the ciphertext as a temporary Cloudflare site. You get a browser-ready download link and a passphrase to send separately.
+`cfshare` encrypts your content locally and publishes the ciphertext as a temporary Cloudflare site. You get a browser-ready link and a passphrase to send separately.
 
 ```sh
 npx cfshare ./demo.zip
+```
+
+Share text directly or pipe it from another command. Newlines, including a trailing newline, are preserved:
+
+```sh
+cfshare text $'first line\nsecond line'
+printf 'first line\nsecond line\n' | cfshare text
 ```
 
 ```txt
@@ -135,6 +142,7 @@ When a phrase is generated, `--json` includes `generatedPassphrase`. Treat the c
 ```txt
 cfshare <path> [options]
 cfshare send <path> [options]
+cfshare text [value] [options]
 cfshare get <url> [options]
 cfshare config set server <url|drop>
 cfshare config unset server
@@ -149,6 +157,8 @@ cfshare config show
 | `--server <url\|drop>`    | Override the configured backend               |
 | `--ttl <duration>`        | Set self-hosted expiration                    |
 | `--token <token>`         | Set upload token; prefer `CFSHARE_TOKEN`      |
+
+`cfshare text` reads from stdin when no value is provided. Browser recipients reveal text in the page; `cfshare get` writes text shares directly to stdout and continues to save file shares to disk.
 
 | Get option                | Purpose                              |
 | ------------------------- | ------------------------------------ |
@@ -241,8 +251,13 @@ const share = await cfshare.share("./demo.zip", {
   acceptCloudflareTerms: true,
 });
 
+const note = await cfshare.shareText("first line\nsecond line\n", {
+  acceptCloudflareTerms: true,
+});
+
 console.log(share.url);
 console.log(share.generatedPassphrase);
+console.log(note.url);
 ```
 
 Pass a directory path to recursively ZIP it before encryption.

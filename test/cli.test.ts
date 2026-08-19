@@ -34,6 +34,23 @@ test("allows password prompt flag before the target", () => {
   });
 });
 
+test("parses text from an argument or piped stdin", () => {
+  assert.deepEqual(parseArgs(["text", "first line\nsecond line", "--yes"]), {
+    command: "text",
+    yes: true,
+    json: false,
+    force: false,
+    target: "first line\nsecond line",
+  });
+  assert.deepEqual(parseArgs(["text", "--yes"]), {
+    command: "text",
+    yes: true,
+    json: false,
+    force: false,
+    target: undefined,
+  });
+});
+
 test("rejects command-specific options on the wrong command", () => {
   assert.throws(() => parseArgs(["archive.zip", "--force"]), /only valid with 'cfshare get'/);
   assert.throws(

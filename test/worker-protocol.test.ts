@@ -39,6 +39,11 @@ test("accepts a consistent manifest", () => {
   assert.equal(manifestError(uploadManifest()), null);
 });
 
+test("accepts text manifests and rejects unknown transfer kinds", () => {
+  assert.equal(manifestError(uploadManifest({ kind: "text" })), null);
+  assert.match(manifestError(uploadManifest({ kind: "binary" })) ?? "", /kind/);
+});
+
 test("rejects unsupported transfer formats", () => {
   assert.match(manifestError(uploadManifest({ format: "cfshare/v2" })) ?? "", /format/);
 });

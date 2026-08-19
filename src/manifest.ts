@@ -77,6 +77,10 @@ export function parseManifest(
     return { ok: false, error: "Unsupported transfer format" };
   }
 
+  if (value.kind !== undefined && value.kind !== "file" && value.kind !== "text") {
+    return { ok: false, error: "Invalid transfer kind" };
+  }
+
   if (
     !isJsonString(value.name) ||
     value.name.length === 0 ||
@@ -150,6 +154,7 @@ export function parseManifest(
     ok: true,
     manifest: {
       format: CFSHARE_FORMAT,
+      kind: value.kind ?? "file",
       name: value.name,
       type: value.type,
       size: value.size,

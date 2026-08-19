@@ -135,6 +135,47 @@ test("client requires explicit terms acceptance for Drop", async () => {
   await assert.rejects(client.share("not-read.txt"), /acceptCloudflareTerms: true/);
 });
 
+test("client shares multiline text through the self-hosted protocol", async () => {
+  const text = "first line\n\nthird line\n";
+  let manifest: JsonValue = null;
+  let payload: Buffer | undefined;
+  const fetchImpl: typeof fetch = async (url, init) => {
+    if (inputUrl(url).endsWith("/api/shares")) {
+      const body: JsonValue = await new Response(init?.body).json();
+      manifest = isJsonObject(body) ? (body.manifest ?? null) : null;
+      return Response.json(
+        { id: "abcdefghijklmnopqrst", protocol: CFSHARE_UPLOAD_PROTOCOL },
+        { status: 201 },
+      );
+    }
+
+    if (init?.method === "PUT") {
+      payload = Buffer.from(await new Response(init.body).arrayBuffer());
+    }
+
+    return inputUrl(url).endsWith("/complete")
+      ? Response.json({
+          url: "https://share.example/abcdefghijklmnopqrst/",
+          expiresAt: "2026-08-09T00:00:00.000Z",
+        })
+      : Response.json({ ok: true });
+  };
+  const result = await createClient({
+    server: "https://share.example",
+    token: "upload-token",
+    fetch: fetchImpl,
+  }).shareText(text, { passphrase: "text phrase", retryDelays: [] });
+  const parsed = parseManifest(manifest ?? null);
+
+  assert.equal(result.name, "shared-text.txt");
+  assert.ok(parsed.ok && payload);
+  assert.equal(parsed.manifest.kind, "text");
+  assert.equal(
+    (await decryptBuffer(payload, "text phrase", parsed.manifest.crypto)).toString(),
+    text,
+  );
+});
+
 test("client does not return a caller-provided passphrase", async ({ onTestFinished }) => {
   const root = await mkdtemp(join(tmpdir(), "cfshare-client-phrase-test-"));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
@@ -215,5 +256,6 @@ test("client downloads a cfshare transfer into memory", async () => {
   });
 
   assert.equal(result.manifest.name, "download.txt");
+  assert.equal(result.manifest.kind, "file");
   assert.deepEqual(result.data, data);
 });

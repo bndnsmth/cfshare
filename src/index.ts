@@ -12,4 +12,5 @@ export type {
   SavedDownload,
   ShareOptions,
   ShareResult,
+  TextShareOptions,
 } from "./types";
