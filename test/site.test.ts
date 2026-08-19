@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Script } from "node:vm";
-import { createShareBundle } from "../src/site";
+import { createShareBundle, createTextShareBundle } from "../src/site";
 import { decryptBuffer } from "../src/crypto";
 import { fromBufferPromise } from "yauzl";
 
@@ -66,6 +66,31 @@ test("supports smaller chunks for Durable Object values", async ({ onTestFinishe
     metadata.payloads.map(({ size }) => size),
     [4, 4, 4, 4, 4, 4, 2],
   );
+});
+
+test("preserves multiline plain text through encryption", async ({ onTestFinished }) => {
+  const root = await mkdtemp(join(tmpdir(), "cfshare-text-test-"));
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
+
+  const text = "first line\n\nthird line\n";
+  const metadata = await createTextShareBundle({
+    text,
+    outputDir: root,
+    passphrase: "text phrase",
+    now: new Date("2026-08-07T12:00:00.000Z"),
+  });
+  const payload = Buffer.concat(
+    await Promise.all(metadata.payloads.map(({ path }) => readFile(join(root, path)))),
+  );
+  const html = await readFile(join(root, "index.html"), "utf8");
+
+  assert.equal(metadata.kind, "text");
+  assert.equal(metadata.type, "text/plain; charset=utf-8");
+  assert.equal(metadata.size, Buffer.byteLength(text));
+  assert.equal((await decryptBuffer(payload, "text phrase", metadata.crypto)).toString(), text);
+  assert.match(html, /new TextDecoder\("utf-8"/);
+  assert.match(html, /output\.textContent/);
+  assert.match(html, /white-space:pre-wrap/);
 });
 
 test("requires a passphrase to build a share", async ({ onTestFinished }) => {

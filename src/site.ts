@@ -71,6 +71,83 @@ export interface CreateShareBundleOptions {
   chunkSize?: number;
 }
 
+export interface CreateTextShareBundleOptions {
+  text: string;
+  outputDir: string;
+  passphrase: string;
+  name?: string;
+  now?: Date;
+  chunkSize?: number;
+}
+
+interface WriteShareBundleOptions {
+  source: Buffer;
+  name: string;
+  kind: "file" | "text";
+  outputDir: string;
+  passphrase: string;
+  now: Date;
+  chunkSize: number;
+}
+
+async function writeShareBundle({
+  source,
+  name,
+  kind,
+  outputDir,
+  passphrase,
+  now,
+  chunkSize,
+}: WriteShareBundleOptions): Promise<CFShareManifest> {
+  if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0 || chunkSize > MAX_TRANSPORT_BYTES) {
+    throw new Error(`Chunk size must be an integer between 1 and ${MAX_TRANSPORT_BYTES} bytes`);
+  }
+
+  if (source.length > MAX_FILE_SIZE) {
+    throw new Error(`File exceeds cfshare's ${MAX_FILE_SIZE_LABEL} safety limit`);
+  }
+
+  if (
+    !name ||
+    name.length > 1024 ||
+    name.includes("/") ||
+    name.includes("\\") ||
+    Array.from(name).some((character) => character.charCodeAt(0) < 32)
+  ) {
+    throw new Error("Transfer name must be a filename");
+  }
+
+  await mkdir(outputDir, { recursive: true, mode: 0o700 });
+
+  const transformed = await encryptBuffer(source, passphrase);
+  const payloads = await writeChunks(outputDir, transformed.data, chunkSize);
+  const metadata: CFShareManifest = {
+    format: CFSHARE_FORMAT,
+    kind,
+    name,
+    type:
+      kind === "text"
+        ? "text/plain; charset=utf-8"
+        : (MIME_TYPES.get(extname(name).toLowerCase()) ?? "application/octet-stream"),
+    size: source.length,
+    storedSize: transformed.data.length,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + SHARE_LIFETIME_MS).toISOString(),
+    payloads,
+    crypto: transformed.crypto,
+  };
+
+  await Promise.all([
+    writeFile(join(outputDir, "cfshare.json"), `${JSON.stringify(metadata, null, 2)}\n`, {
+      mode: 0o600,
+    }),
+    writeFile(join(outputDir, "index.html"), createLandingPage(), { mode: 0o600 }),
+    writeFile(join(outputDir, "_headers"), createHeaders(), { mode: 0o600 }),
+  ]);
+
+  return metadata;
+}
+
 export async function createShareBundle({
   inputPath,
   outputDir,
@@ -78,13 +155,7 @@ export async function createShareBundle({
   now = new Date(),
   chunkSize = CHUNK_SIZE,
 }: CreateShareBundleOptions): Promise<CFShareManifest> {
-  if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0 || chunkSize > MAX_TRANSPORT_BYTES) {
-    throw new Error(`Chunk size must be an integer between 1 and ${MAX_TRANSPORT_BYTES} bytes`);
-  }
-
   const inputStat = await lstat(inputPath);
-
-  await mkdir(outputDir, { recursive: true, mode: 0o700 });
 
   let name: string;
   let source: Buffer;
@@ -111,30 +182,30 @@ export async function createShareBundle({
     throw new Error("Only regular files and directories can be shared");
   }
 
-  const transformed = await encryptBuffer(source, passphrase);
-  const payloads = await writeChunks(outputDir, transformed.data, chunkSize);
+  return writeShareBundle({ source, name, kind: "file", outputDir, passphrase, now, chunkSize });
+}
 
-  const metadata: CFShareManifest = {
-    format: CFSHARE_FORMAT,
+export async function createTextShareBundle({
+  text,
+  outputDir,
+  passphrase,
+  name = "shared-text.txt",
+  now = new Date(),
+  chunkSize = CHUNK_SIZE,
+}: CreateTextShareBundleOptions): Promise<CFShareManifest> {
+  if (typeof text !== "string") {
+    throw new Error("Text must be a string");
+  }
+
+  return writeShareBundle({
+    source: Buffer.from(text, "utf8"),
     name,
-    type: MIME_TYPES.get(extname(name).toLowerCase()) ?? "application/octet-stream",
-    size: source.length,
-    storedSize: transformed.data.length,
-    createdAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + SHARE_LIFETIME_MS).toISOString(),
-    payloads,
-    crypto: transformed.crypto,
-  };
-
-  await Promise.all([
-    writeFile(join(outputDir, "cfshare.json"), `${JSON.stringify(metadata, null, 2)}\n`, {
-      mode: 0o600,
-    }),
-    writeFile(join(outputDir, "index.html"), createLandingPage(), { mode: 0o600 }),
-    writeFile(join(outputDir, "_headers"), createHeaders(), { mode: 0o600 }),
-  ]);
-
-  return metadata;
+    kind: "text",
+    outputDir,
+    passphrase,
+    now,
+    chunkSize,
+  });
 }
 
 function createHeaders(): string {
@@ -202,6 +273,8 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
     button:disabled { cursor:wait; opacity:.65; }
     .message { min-height:20px; margin:12px 0 0; color:var(--panel-muted); font-size:11px; line-height:1.5; }
     .message.error { color:#b42f18; }
+    .text-output { max-height:45vh; margin:18px 0 0; padding:16px; overflow:auto; border:1px solid var(--ink); color:var(--ink); background:color-mix(in srgb,var(--paper) 86%,var(--ink)); font:13px/1.65 "IBM Plex Mono","SFMono-Regular",Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+    [hidden] { display:none!important; }
     footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px 24px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
     .project-link { color:inherit; text-underline-offset:3px; }
     .project-link:hover { color:var(--acid); }
@@ -235,6 +308,7 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
           <input id="passphrase" type="password" autocomplete="off" placeholder="Enter the shared phrase">
           <button id="download" type="submit" disabled>Prepare download</button>
         </form>
+        <pre class="text-output" id="text-output" tabindex="0" hidden></pre>
         <p class="message" id="message" role="status" aria-live="polite">Reading transfer manifest...</p>
       </section>
     </main>
@@ -254,7 +328,7 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
     const isPayloadPath = (value) => typeof value === "string" && value.length > 0 && value.length <= 1024 && !value.startsWith("/") && !value.includes("\\\\") && !value.split("/").includes("..") && !/^[a-z][a-z\\d+.-]*:/i.test(value);
 
     function validateManifest(candidate) {
-      if (!candidate || candidate.format !== "${CFSHARE_FORMAT}" || typeof candidate.name !== "string" || candidate.name.length === 0 || candidate.name.length > 1024 || candidate.name.includes("/") || candidate.name.includes("\\\\") || Array.from(candidate.name).some((character) => character.charCodeAt(0) < 32) || typeof candidate.type !== "string" || candidate.type.length === 0 || candidate.type.length > 255) {
+      if (!candidate || candidate.format !== "${CFSHARE_FORMAT}" || (candidate.kind !== undefined && candidate.kind !== "file" && candidate.kind !== "text") || typeof candidate.name !== "string" || candidate.name.length === 0 || candidate.name.length > 1024 || candidate.name.includes("/") || candidate.name.includes("\\\\") || Array.from(candidate.name).some((character) => character.charCodeAt(0) < 32) || typeof candidate.type !== "string" || candidate.type.length === 0 || candidate.type.length > 255) {
         throw new Error("Unsupported transfer format");
       }
 
@@ -371,6 +445,14 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     }
 
+    function revealText(data) {
+      const output = $("text-output");
+      output.textContent = new TextDecoder("utf-8", { fatal:true }).decode(data);
+      $("download-form").hidden = true;
+      output.hidden = false;
+      output.focus();
+    }
+
     function updateClock() {
       const remaining = new Date(manifest.expiresAt).getTime() - Date.now();
 
@@ -395,10 +477,15 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
 
       $("filename").textContent = manifest.name;
       $("size").textContent = formatSize(manifest.size);
+      if (manifest.kind === "text") {
+        document.querySelector("h1").innerHTML = "A note<br>is waiting.";
+        $("explanation").textContent = "This note expires automatically. It is assembled and decrypted in your browser; the passphrase never leaves this device.";
+        $("download").textContent = "Reveal text";
+      }
       updateClock();
       setInterval(updateClock, 30000);
       $("download").disabled = false;
-      $("message").textContent = "Encrypted file. The phrase stays in this page.";
+      $("message").textContent = manifest.kind === "text" ? "Encrypted text. The phrase stays in this page." : "Encrypted file. The phrase stays in this page.";
     }
 
     $("download-form").addEventListener("submit", async (event) => {
@@ -427,9 +514,13 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
           throw new Error("Decrypted file size does not match the manifest");
         }
 
-        save(data);
-
-        message.textContent = "Download ready. This tab can be closed.";
+        if (manifest.kind === "text") {
+          revealText(data);
+          message.textContent = "Text revealed locally.";
+        } else {
+          save(data);
+          message.textContent = "Download ready. This tab can be closed.";
+        }
       } catch (error) {
         message.textContent = "Wrong passphrase, expired link, or damaged transfer.";
         message.classList.add("error");

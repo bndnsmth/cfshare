@@ -2,12 +2,14 @@ import { createInterface } from "node:readline/promises";
 import packageMetadata from "../package.json" with { type: "json" };
 import { CONFIG_PATH, normalizeServerUrl, readConfig, writeConfig } from "./config";
 import { createClient } from "./client";
+import { saveShare } from "./download";
+import type { CFShareProgress } from "./types";
 
 const VERSION = packageMetadata.version;
 const TERMS_URL = "https://www.cloudflare.com/terms/";
 const PRIVACY_URL = "https://www.cloudflare.com/privacypolicy/";
 
-type Command = "help" | "version" | "config" | "send" | "get";
+type Command = "help" | "version" | "config" | "send" | "text" | "get";
 
 export interface CLIOptions {
   command: Command;
@@ -24,11 +26,12 @@ export interface CLIOptions {
   target?: string;
 }
 
-const HELP = `cfshare - expiring file transfers on Cloudflare
+const HELP = `cfshare - expiring file and text transfers on Cloudflare
 
 Usage:
   cfshare <path> [options]
   cfshare send <path> [options]
+  cfshare text [value] [options]
   cfshare get <url> [options]
   cfshare config set server <url|drop>
   cfshare config unset server
@@ -55,6 +58,8 @@ Environment:
 
 Examples:
   cfshare ./demo.zip
+  cfshare text $'first line\\nsecond line'
+  printf 'first line\\nsecond line\\n' | cfshare text
   cfshare ./photos --yes
   cfshare ./notes.pdf --yes
   cfshare ./build.zip --server https://share.example.com --ttl 12h
@@ -90,10 +95,10 @@ export function parseArgs(argv: string[]): CLIOptions {
     throw new Error("Use 'cfshare config set server <url|drop>', 'unset server', or 'show'");
   }
 
-  let command: "send" | "get" = "send";
+  let command: "send" | "text" | "get" = "send";
 
-  if (args[0] === "send" || args[0] === "get") {
-    command = args.shift() === "get" ? "get" : "send";
+  if (args[0] === "send" || args[0] === "text" || args[0] === "get") {
+    command = args.shift() as "send" | "text" | "get";
   }
 
   const options: CLIOptions = { command, yes: false, json: false, force: false };
@@ -149,13 +154,17 @@ export function parseArgs(argv: string[]): CLIOptions {
     }
   }
 
-  if (positionals.length !== 1) {
-    throw new Error(`${command} requires exactly one ${command === "get" ? "URL" : "path"}`);
+  if (positionals.length !== 1 && (command !== "text" || positionals.length !== 0)) {
+    throw new Error(
+      command === "text"
+        ? "text accepts one value or piped stdin"
+        : `${command} requires exactly one ${command === "get" ? "URL" : "path"}`,
+    );
   }
 
   options.target = positionals[0];
 
-  if (command === "send" && (options.force || options.output)) {
+  if ((command === "send" || command === "text") && (options.force || options.output)) {
     throw new Error("--force and --output are only valid with 'cfshare get'");
   }
 
@@ -271,8 +280,25 @@ async function resolvePassphrase(option: string | true | undefined): Promise<str
 }
 
 async function send(options: CLIOptions): Promise<void> {
-  if (!options.target) {
+  if (options.command === "send" && !options.target) {
     throw new Error("send requires a path");
+  }
+
+  let text: string | undefined;
+  if (options.command === "text") {
+    if (options.target !== undefined) {
+      text = options.target;
+    } else {
+      if (process.stdin.isTTY) {
+        throw new Error("text requires a value or piped stdin");
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      text = Buffer.concat(chunks).toString("utf8");
+    }
   }
 
   const config = await readConfig();
@@ -295,11 +321,11 @@ async function send(options: CLIOptions): Promise<void> {
 
   const passphrase = await resolvePassphrase(options.password);
 
-  const result = await client.share(options.target, {
+  const shareOptions = {
     passphrase,
     ttl: options.ttl,
     acceptCloudflareTerms: !selfHosted,
-    onProgress: (progress) => {
+    onProgress: (progress: CFShareProgress) => {
       if (options.json) {
         return;
       }
@@ -323,7 +349,11 @@ async function send(options: CLIOptions): Promise<void> {
         );
       }
     },
-  });
+  };
+  const result =
+    options.command === "text"
+      ? await client.shareText(text ?? "", shareOptions)
+      : await client.share(options.target ?? "", shareOptions);
 
   if (!options.json && process.stderr.isTTY) {
     process.stderr.write("\r\x1b[2K");
@@ -386,30 +416,42 @@ async function get(options: CLIOptions): Promise<void> {
   let transfer;
 
   try {
-    transfer = await client.downloadToFile(options.target, {
-      passphrase,
-      output: options.output,
-      force: options.force,
-      onProgress: (progress) => {
-        if (
-          progress.phase === "receiving" &&
-          process.stderr.isTTY &&
-          progress.total &&
-          progress.loaded != null
-        ) {
-          process.stderr.write(
-            `\rReceiving ${Math.round((progress.loaded / progress.total) * 100)}%`,
-          );
-        }
-      },
-    });
+    const onProgress = (progress: CFShareProgress) => {
+      if (
+        progress.phase === "receiving" &&
+        process.stderr.isTTY &&
+        progress.total &&
+        progress.loaded != null
+      ) {
+        process.stderr.write(
+          `\rReceiving ${Math.round((progress.loaded / progress.total) * 100)}%`,
+        );
+      }
+    };
+
+    const downloaded = await client.download(options.target, { passphrase, onProgress });
+    transfer =
+      downloaded.manifest.kind === "text"
+        ? downloaded
+        : {
+            manifest: downloaded.manifest,
+            path: await saveShare({
+              ...downloaded,
+              outputPath: options.output,
+              force: options.force,
+            }),
+          };
   } finally {
     if (process.stderr.isTTY) {
       process.stderr.write("\r\x1b[2K");
     }
   }
 
-  console.log(transfer.path);
+  if ("data" in transfer) {
+    process.stdout.write(transfer.data);
+  } else {
+    console.log(transfer.path);
+  }
 }
 
 export async function run(argv: string[]): Promise<void> {
@@ -427,7 +469,7 @@ export async function run(argv: string[]): Promise<void> {
     return configure(options);
   }
 
-  if (options.command === "send") {
+  if (options.command === "send" || options.command === "text") {
     return send(options);
   }
 
