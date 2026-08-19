@@ -1,6 +1,6 @@
 {
   "name": "cfshare",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Share encrypted, expiring files and folders through Cloudflare Drop or your own Worker.",
   "keywords": [
     "cli",
