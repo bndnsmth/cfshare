@@ -178,6 +178,8 @@ The included Worker stores each encrypted share in one randomly named Durable Ob
 
 No R2, KV, D1, wildcard DNS, or per-share route is required.
 
+The same Worker can also run on the open-source [celld](https://celld.dev) runtime. See the [celld deployment guide](docs/celld-docs.md) for the compatible config, deployment steps, and end-to-end verification.
+
 For a one-click setup, use **Deploy to Cloudflare** above. Cloudflare clones the repository into your GitHub or GitLab account, prompts for a unique `UPLOAD_TOKEN`, provisions the Durable Object, deploys the Worker, and configures builds for future pushes.
 
 To deploy manually instead:

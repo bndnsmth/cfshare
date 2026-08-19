@@ -1,7 +1,9 @@
 import { lstat, readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type { Readable } from "node:stream";
-import { ZipFile } from "yazl";
+import type { ZipFile } from "yazl";
+
+const YAZL_PACKAGE = "yazl";
 
 function formatLimit(maxBytes: number): string {
   return `${(maxBytes / 1024 ** 2).toFixed(1)} MiB`;
@@ -94,6 +96,7 @@ export async function createDirectoryArchive(
   inputPath: string,
   maxBytes: number,
 ): Promise<DirectoryArchive> {
+  const { ZipFile } = (await import(YAZL_PACKAGE)) as typeof import("yazl");
   const zipFile = new ZipFile();
   const rootName = basename(resolve(inputPath)) || "archive";
   const name = /\.zip$/i.test(rootName) ? rootName : `${rootName}.zip`;

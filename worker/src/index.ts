@@ -14,6 +14,7 @@ import {
   type CFShareManifest,
 } from "../../src/types";
 import { json, publicHeaders } from "./http";
+import { publicOrigin } from "./origin";
 import { parseUploadManifest } from "./protocol";
 import { ShareObject } from "./share-object";
 
@@ -127,7 +128,7 @@ async function authorizeUpload(request: Request, env: Env): Promise<Response | n
 }
 
 function instanceHome(request: Request, env: Env): Response {
-  const url = new URL(request.url);
+  const origin = publicOrigin(request, env.PUBLIC_ORIGIN);
   const defaultTtl = parseInteger(env.DEFAULT_TTL_SECONDS, 3600);
   const authState = env.UPLOAD_TOKEN ? "token required" : "uploads disabled";
   const branding = brandingFromEnv(env);
@@ -153,7 +154,7 @@ function instanceHome(request: Request, env: Env): Response {
     <h1>${brandName} node online.</h1>
     ${summary}
     <p class="detail">Point the cfshare CLI at this origin to create expiring, encrypted shares stored entirely inside one Durable Object.</p>
-    <p><code>cfshare file.zip --server ${url.origin} --ttl ${defaultTtl}s</code></p>
+    <p><code>cfshare file.zip --server ${origin} --ttl ${defaultTtl}s</code></p>
     <hr>
     <p>Upload policy: ${authState}<br>Storage: streamed Durable Object SQLite<br>Health: <a href="/health" style="color:inherit">/health</a></p>
     <a class="project-link" href="${CFSHARE_PROJECT_URL}" target="_blank" rel="noreferrer">Powered by cfshare</a>
@@ -172,6 +173,7 @@ function instanceHome(request: Request, env: Env): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const origin = publicOrigin(request, env.PUBLIC_ORIGIN);
 
     if (request.method === "GET" && url.pathname === "/") {
       return instanceHome(request, env);
@@ -253,7 +255,7 @@ export default {
         {
           id,
           protocol: CFSHARE_UPLOAD_PROTOCOL,
-          url: `${url.origin}/${id}/`,
+          url: `${origin}/${id}/`,
           expiresAt: manifest.expiresAt,
         },
         201,
@@ -300,7 +302,7 @@ export default {
           return json({ error: "Invalid completion response" }, 502);
         }
 
-        return json({ url: `${url.origin}/${id}/`, expiresAt: result.expiresAt });
+        return json({ url: `${origin}/${id}/`, expiresAt: result.expiresAt });
       }
 
       if (request.method === "DELETE" && action === "") {
@@ -316,7 +318,7 @@ export default {
       const [, id, resource] = publicMatch;
 
       if (resource === undefined) {
-        return Response.redirect(`${url.origin}/${id}/`, 308);
+        return Response.redirect(`${origin}/${id}/`, 308);
       }
 
       const stub = env.SHARES.getByName(id);
