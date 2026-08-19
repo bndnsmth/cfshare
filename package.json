@@ -76,6 +76,24 @@
     "bindings": {
       "UPLOAD_TOKEN": {
         "description": "Required bearer token for uploads. Generate a unique value with `openssl rand -hex 32`."
+      },
+      "BRAND_NAME": {
+        "description": "Name shown on the self-hosted Worker and its transfer pages."
+      },
+      "BRAND_SUMMARY": {
+        "description": "Optional short summary shown beneath the transfer heading."
+      },
+      "BRAND_LOGO_URL": {
+        "description": "Optional public HTTPS logo URL."
+      },
+      "BRAND_BACKGROUND": {
+        "description": "Six-digit hex color for the page background."
+      },
+      "BRAND_FOREGROUND": {
+        "description": "Six-digit hex color for page text and light surfaces."
+      },
+      "BRAND_ACCENT": {
+        "description": "Six-digit hex color for highlights and calls to action."
       }
     }
   }

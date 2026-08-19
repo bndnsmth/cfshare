@@ -208,6 +208,25 @@ cfshare ./demo.zip --ttl 2d
 
 Supported duration suffixes are `s`, `m`, `h`, and `d`. Defaults and limits live in the `vars` block of `wrangler.jsonc`.
 
+### Branding
+
+Self-hosted Worker pages can use light deployment-level branding. Set these values in the `vars` block of `wrangler.jsonc` before deploying:
+
+```jsonc
+{
+  "vars": {
+    "BRAND_NAME": "Acme Secure Transfer",
+    "BRAND_SUMMARY": "Private file delivery for Acme clients and partners.",
+    "BRAND_LOGO_URL": "https://acme.example/logo.svg",
+    "BRAND_BACKGROUND": "#101820",
+    "BRAND_FOREGROUND": "#f7f4ed",
+    "BRAND_ACCENT": "#ffb81c",
+  },
+}
+```
+
+The logo is optional and must use HTTPS. Colors must be six-digit hex values. Invalid settings safely fall back to the default cfshare branding. These values affect the Worker home page and every transfer it serves; Cloudflare Drop transfers retain the standard cfshare appearance.
+
 Return to Drop with `cfshare config unset server` or use `--server drop` for one transfer. `CFSHARE_SERVER` overrides saved configuration, and `--server` overrides both.
 
 ## Node.js Client

@@ -1,4 +1,10 @@
 import { createLandingPage } from "../../src/site";
+import {
+  createContentSecurityPolicy,
+  escapeHtml,
+  normalizeSiteBranding,
+  type SiteBranding,
+} from "../../src/branding";
 import { isJsonNumber, isJsonObject, isJsonString, type JsonValue } from "../../src/json";
 import {
   CFSHARE_FORMAT,
@@ -66,6 +72,17 @@ function parseInteger(value: string, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function brandingFromEnv(env: Env): SiteBranding {
+  return normalizeSiteBranding({
+    name: env.BRAND_NAME,
+    summary: env.BRAND_SUMMARY,
+    logoUrl: env.BRAND_LOGO_URL,
+    background: env.BRAND_BACKGROUND,
+    foreground: env.BRAND_FOREGROUND,
+    accent: env.BRAND_ACCENT,
+  });
+}
+
 function randomSlug() {
   const bytes = crypto.getRandomValues(new Uint8Array(15));
 
@@ -112,10 +129,41 @@ function instanceHome(request: Request, env: Env): Response {
   const url = new URL(request.url);
   const defaultTtl = parseInteger(env.DEFAULT_TTL_SECONDS, 3600);
   const authState = env.UPLOAD_TOKEN ? "token required" : "uploads disabled";
+  const branding = brandingFromEnv(env);
+  const brandName = escapeHtml(branding.name);
+  const logo = branding.logoUrl ? `<img src="${escapeHtml(branding.logoUrl)}" alt="">` : "";
+  const summary = branding.summary ? `<p class="summary">${escapeHtml(branding.summary)}</p>` : "";
 
   return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>cfshare node</title><style>:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#11120f;color:#eeeadd;font:16px/1.6 ui-monospace,monospace}.box{width:min(720px,calc(100% - 40px));border-top:5px solid #d9ff43;padding-top:30px}h1{font:64px/1 Georgia,serif;margin:0 0 22px}.tag{color:#d9ff43;text-transform:uppercase;letter-spacing:.12em;font-size:12px}code{color:#d9ff43}hr{border:0;border-top:1px solid #42433b;margin:28px 0}</style></head><body><main class="box"><p class="tag">Self-hosted edge transfer</p><h1>cfshare node online.</h1><p>Point the CLI at this origin to create expiring, encrypted shares stored entirely inside one Durable Object.</p><p><code>cfshare file.zip --server ${url.origin} --ttl ${defaultTtl}s</code></p><hr><p>Upload policy: ${authState}<br>Storage: streamed Durable Object SQLite<br>Health: <a href="/health" style="color:inherit">/health</a></p></main></body></html>`,
-    { headers: publicHeaders("text/html; charset=utf-8") },
+    `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${brandName} node</title>
+  <style>
+    :root{--background:${branding.background};--foreground:${branding.foreground};--accent:${branding.accent};--muted:color-mix(in srgb,var(--foreground) 65%,var(--background));--line:color-mix(in srgb,var(--foreground) 24%,var(--background))}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--background);color:var(--foreground);font:16px/1.6 ui-monospace,monospace}.box{width:min(720px,calc(100% - 40px));border-top:5px solid var(--accent);padding-top:30px}.brand{display:flex;align-items:center;gap:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:800}.brand img{display:block;width:auto;height:34px;max-width:140px;object-fit:contain}.brand span,h1{overflow-wrap:anywhere}h1{font:64px/1 Georgia,serif;margin:24px 0 22px}.summary{max-width:620px;color:var(--accent);font-weight:700}.detail{color:var(--muted)}code{color:var(--accent)}hr{border:0;border-top:1px solid var(--line);margin:28px 0}@media(max-width:600px){h1{font-size:46px}}
+  </style>
+</head>
+<body>
+  <main class="box">
+    <div class="brand">${logo}<span>${brandName} // Self-hosted edge transfer</span></div>
+    <h1>${brandName} node online.</h1>
+    ${summary}
+    <p class="detail">Point the cfshare CLI at this origin to create expiring, encrypted shares stored entirely inside one Durable Object.</p>
+    <p><code>cfshare file.zip --server ${url.origin} --ttl ${defaultTtl}s</code></p>
+    <hr>
+    <p>Upload policy: ${authState}<br>Storage: streamed Durable Object SQLite<br>Health: <a href="/health" style="color:inherit">/health</a></p>
+  </main>
+</body>
+</html>`,
+    {
+      headers: {
+        ...publicHeaders("text/html; charset=utf-8"),
+        "Content-Security-Policy": createContentSecurityPolicy(branding),
+      },
+    },
   );
 }
 
@@ -280,11 +328,12 @@ export default {
           return manifestResponse;
         }
 
-        return new Response(createLandingPage(), {
+        const branding = brandingFromEnv(env);
+
+        return new Response(createLandingPage(branding), {
           headers: {
             ...publicHeaders("text/html; charset=utf-8"),
-            "Content-Security-Policy":
-              "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            "Content-Security-Policy": createContentSecurityPolicy(branding),
           },
         });
       }

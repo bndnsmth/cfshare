@@ -1,6 +1,13 @@
 import { basename, extname, join } from "node:path";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createDirectoryArchive } from "./archive";
+import {
+  createContentSecurityPolicy,
+  DEFAULT_SITE_BRANDING,
+  escapeHtml,
+  normalizeSiteBranding,
+  type SiteBranding,
+} from "./branding";
 import { encryptBuffer } from "./crypto";
 import {
   CFSHARE_FORMAT,
@@ -135,41 +142,56 @@ function createHeaders(): string {
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  Content-Security-Policy: ${createContentSecurityPolicy(DEFAULT_SITE_BRANDING)}
 `;
 }
 
-export function createLandingPage(): string {
+export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): string {
+  const branding = normalizeSiteBranding(brandingInput);
+  const brandName = escapeHtml(branding.name);
+  const favicon = branding.logoUrl
+    ? escapeHtml(branding.logoUrl)
+    : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%2311120f'/%3E%3Cpath d='M15 15h25v8H23v18h17v8H15z' fill='%23d9ff43'/%3E%3C/svg%3E";
+  const logo = branding.logoUrl
+    ? `<img class="brand-logo" src="${escapeHtml(branding.logoUrl)}" alt="">`
+    : "";
+  const summary = branding.summary
+    ? `<p class="brand-summary">${escapeHtml(branding.summary)}</p>`
+    : "";
+
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%2311120f'/%3E%3Cpath d='M15 15h25v8H23v18h17v8H15z' fill='%23d9ff43'/%3E%3C/svg%3E">
-  <title>cfshare - Temporary transfer</title>
+  <link rel="icon" href="${favicon}">
+  <title>${brandName} - Temporary transfer</title>
   <style>
-    :root { --ink:#11120f; --paper:#eeeadd; --acid:#d9ff43; --muted:#9d9b8e; --danger:#ff5b3d; }
+    :root { --ink:${branding.background}; --paper:${branding.foreground}; --acid:${branding.accent}; --muted:color-mix(in srgb,var(--paper) 62%,var(--ink)); --line:color-mix(in srgb,var(--paper) 24%,var(--ink)); --panel-muted:color-mix(in srgb,var(--ink) 55%,var(--paper)); --danger:#ff5b3d; }
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body { margin:0; color:var(--paper); background:var(--ink); font-family:"IBM Plex Mono","SFMono-Regular",Consolas,monospace; }
-    body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.17; background-image:repeating-linear-gradient(105deg, transparent 0 34px, rgba(255,255,255,.08) 35px, transparent 36px), radial-gradient(circle at 80% 8%, rgba(217,255,67,.25), transparent 28%); }
+    body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.17; background-image:repeating-linear-gradient(105deg, transparent 0 34px, color-mix(in srgb,var(--paper) 8%,transparent) 35px, transparent 36px), radial-gradient(circle at 80% 8%, color-mix(in srgb,var(--acid) 25%,transparent), transparent 28%); }
     .shell { position:relative; min-height:100vh; display:grid; grid-template-rows:auto 1fr auto; padding:22px 28px; overflow:hidden; }
-    .rail { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:18px; border-bottom:1px solid #42433b; text-transform:uppercase; letter-spacing:.12em; font-size:11px; }
-    .brand { color:var(--acid); font-weight:800; }
-    .pulse { display:inline-block; width:8px; height:8px; margin-right:8px; border-radius:50%; background:var(--acid); box-shadow:0 0 0 0 rgba(217,255,67,.5); animation:pulse 1.8s infinite; }
+    .rail { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:18px; border-bottom:1px solid var(--line); text-transform:uppercase; letter-spacing:.12em; font-size:11px; }
+    .brand { display:flex; align-items:center; gap:10px; color:var(--acid); font-weight:800; }
+    .brand span { overflow-wrap:anywhere; }
+    .brand-logo { display:block; width:auto; height:28px; max-width:120px; object-fit:contain; }
+    .pulse { display:inline-block; width:8px; height:8px; margin-right:8px; border-radius:50%; background:var(--acid); box-shadow:0 0 0 0 color-mix(in srgb,var(--acid) 50%,transparent); animation:pulse 1.8s infinite; }
     main { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr); gap:7vw; align-items:center; padding:7vh 3vw 9vh; }
     .eyebrow { display:flex; align-items:center; gap:12px; color:var(--acid); font-size:12px; letter-spacing:.16em; text-transform:uppercase; }
     .eyebrow::before { content:""; width:42px; height:2px; background:currentColor; }
     h1 { max-width:800px; margin:24px 0 18px; font-family:"Bodoni 72","Iowan Old Style",Didot,serif; font-size:clamp(64px,9vw,144px); font-weight:400; letter-spacing:-.065em; line-height:.76; }
-    .lede { max-width:590px; color:#c5c1b5; font-size:clamp(14px,1.3vw,18px); line-height:1.7; }
+    .brand-summary { max-width:590px; margin:0 0 10px; color:var(--acid); font-size:12px; font-weight:700; letter-spacing:.08em; line-height:1.5; text-transform:uppercase; }
+    .lede { max-width:590px; color:var(--muted); font-size:clamp(14px,1.3vw,18px); line-height:1.7; }
     .panel { position:relative; padding:30px; color:var(--ink); background:var(--paper); box-shadow:16px 16px 0 var(--acid); transform:rotate(-1deg); }
-    .panel::after { content:"01H"; position:absolute; top:12px; right:16px; color:#777469; font-size:11px; }
-    .label { margin:0 0 7px; color:#777469; font-size:10px; letter-spacing:.14em; text-transform:uppercase; }
+    .panel::after { content:"01H"; position:absolute; top:12px; right:16px; color:var(--panel-muted); font-size:11px; }
+    .label { margin:0 0 7px; color:var(--panel-muted); font-size:10px; letter-spacing:.14em; text-transform:uppercase; }
     .filename { margin:0; overflow-wrap:anywhere; font-family:"Bodoni 72","Iowan Old Style",Didot,serif; font-size:clamp(28px,4vw,47px); line-height:1; }
-    .facts { display:grid; grid-template-columns:1fr 1fr; margin:28px 0; border-top:1px solid #aaa79a; border-bottom:1px solid #aaa79a; }
+    .facts { display:grid; grid-template-columns:1fr 1fr; margin:28px 0; border-top:1px solid color-mix(in srgb,var(--ink) 35%,var(--paper)); border-bottom:1px solid color-mix(in srgb,var(--ink) 35%,var(--paper)); }
     .fact { padding:14px 0; }
-    .fact + .fact { padding-left:18px; border-left:1px solid #aaa79a; }
+    .fact + .fact { padding-left:18px; border-left:1px solid color-mix(in srgb,var(--ink) 35%,var(--paper)); }
     .value { font-size:13px; }
     form { display:grid; gap:9px; }
     input { width:100%; border:1px solid var(--ink); border-radius:0; padding:15px 14px; color:var(--ink); background:transparent; font:inherit; outline:none; }
@@ -177,25 +199,26 @@ export function createLandingPage(): string {
     button { width:100%; border:1px solid var(--ink); border-radius:0; padding:16px; color:var(--paper); background:var(--ink); font:700 12px/1 inherit; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; transition:background .16s,color .16s,transform .16s; }
     button:hover:not(:disabled) { color:var(--ink); background:var(--acid); transform:translate(-3px,-3px); box-shadow:3px 3px 0 var(--ink); }
     button:disabled { cursor:wait; opacity:.65; }
-    .message { min-height:20px; margin:12px 0 0; color:#625f56; font-size:11px; line-height:1.5; }
+    .message { min-height:20px; margin:12px 0 0; color:var(--panel-muted); font-size:11px; line-height:1.5; }
     .message.error { color:#b42f18; }
-    footer { display:flex; justify-content:space-between; gap:24px; padding-top:18px; border-top:1px solid #42433b; color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
-    @keyframes pulse { 70% { box-shadow:0 0 0 9px rgba(217,255,67,0); } 100% { box-shadow:0 0 0 0 rgba(217,255,67,0); } }
+    footer { display:flex; justify-content:space-between; gap:24px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+    @keyframes pulse { 70% { box-shadow:0 0 0 9px transparent; } 100% { box-shadow:0 0 0 0 transparent; } }
     @keyframes enter { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
     main > * { animation:enter .7s both cubic-bezier(.2,.7,.2,1); }
     .panel { animation-delay:.12s; }
-    @media (max-width:800px) { .shell{padding:18px}.rail span:last-child{display:none}main{grid-template-columns:1fr;gap:55px;padding:8vh 0 11vh}h1{font-size:clamp(62px,20vw,104px)}.panel{margin-right:13px;padding:24px;box-shadow:10px 10px 0 var(--acid)}footer{line-height:1.5}.footer-detail{display:none} }
+    @media (max-width:800px) { .shell{padding:18px}.rail>span:last-child{display:none}main{grid-template-columns:1fr;gap:55px;padding:8vh 0 11vh}h1{font-size:clamp(62px,20vw,104px)}.panel{margin-right:13px;padding:24px;box-shadow:10px 10px 0 var(--acid)}footer{line-height:1.5}.footer-detail{display:none} }
     @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
   </style>
 </head>
 <body>
   <div class="shell">
-    <header class="rail"><span class="brand">cfshare // EDGE TRANSFER</span><span><i class="pulse"></i>Temporary node online</span><span>Cloudflare network</span></header>
+    <header class="rail"><span class="brand">${logo}<span>${brandName} // EDGE TRANSFER</span></span><span><i class="pulse"></i>Temporary node online</span><span>Cloudflare network</span></header>
     <main>
       <section>
-        <div class="eyebrow">Incoming transmission</div>
-        <h1>A file<br>is waiting.</h1>
-        <p class="lede" id="explanation">This transfer expires automatically. The file is assembled and decrypted in your browser; the passphrase never leaves this device.</p>
+         <div class="eyebrow">Incoming transmission</div>
+         <h1>A file<br>is waiting.</h1>
+        ${summary}
+         <p class="lede" id="explanation">This transfer expires automatically. The file is assembled and decrypted in your browser; the passphrase never leaves this device.</p>
       </section>
       <section class="panel" aria-labelledby="filename">
         <p class="label">Transfer manifest</p>
