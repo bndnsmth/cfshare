@@ -1,12 +1,8 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "cfshare-worker",
+  "name": "cfshare-celld",
   "main": "worker/src/index.ts",
   "compatibility_date": "2026-08-11",
   "compatibility_flags": ["nodejs_compat"],
-  "secrets": {
-    "required": ["UPLOAD_TOKEN"],
-  },
   "durable_objects": {
     "bindings": [
       {
@@ -15,16 +11,17 @@
       },
     ],
   },
-  "exports": {
-    "ShareObject": {
-      "type": "durable-object",
-      "storage": "sqlite",
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ShareObject"],
     },
-  },
+  ],
   "vars": {
-    "BRAND_NAME": "Acme Secure Transfer",
-    "BRAND_SUMMARY": "Private file delivery for Acme clients and partners.",
-    "BRAND_LOGO_URL": "https://acme.example/logo.svg",
+    "UPLOAD_TOKEN": "",
+    "BRAND_NAME": "cfshare on celld",
+    "BRAND_SUMMARY": "Encrypted, expiring transfers on self-hosted Durable Objects.",
+    "BRAND_LOGO_URL": "",
     "BRAND_BACKGROUND": "#101820",
     "BRAND_FOREGROUND": "#f7f4ed",
     "BRAND_ACCENT": "#ffb81c",
