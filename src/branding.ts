@@ -7,6 +7,8 @@ export interface SiteBranding {
   accent: string;
 }
 
+export const CFSHARE_PROJECT_URL = "https://github.com/bndnsmth/cfshare";
+
 export const DEFAULT_SITE_BRANDING: SiteBranding = {
   name: "cfshare",
   summary: "",

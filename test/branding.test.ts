@@ -76,6 +76,10 @@ test("keeps default Drop landing pages unbranded", () => {
   const html = createLandingPage();
 
   assert.match(html, /<title>cfshare - Temporary transfer<\/title>/);
+  assert.match(
+    html,
+    /href="https:\/\/github\.com\/bndnsmth\/cfshare"[^>]*>Powered by cfshare<\/a>/,
+  );
   assert.doesNotMatch(html, /class="brand-logo"/);
   assert.doesNotMatch(html, /class="brand-summary"/);
 });

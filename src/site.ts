@@ -2,6 +2,7 @@ import { basename, extname, join } from "node:path";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createDirectoryArchive } from "./archive";
 import {
+  CFSHARE_PROJECT_URL,
   createContentSecurityPolicy,
   DEFAULT_SITE_BRANDING,
   escapeHtml,
@@ -201,7 +202,9 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
     button:disabled { cursor:wait; opacity:.65; }
     .message { min-height:20px; margin:12px 0 0; color:var(--panel-muted); font-size:11px; line-height:1.5; }
     .message.error { color:#b42f18; }
-    footer { display:flex; justify-content:space-between; gap:24px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+    footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px 24px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+    .project-link { color:inherit; text-underline-offset:3px; }
+    .project-link:hover { color:var(--acid); }
     @keyframes pulse { 70% { box-shadow:0 0 0 9px transparent; } 100% { box-shadow:0 0 0 0 transparent; } }
     @keyframes enter { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
     main > * { animation:enter .7s both cubic-bezier(.2,.7,.2,1); }
@@ -235,7 +238,7 @@ export function createLandingPage(brandingInput: Partial<SiteBranding> = {}): st
         <p class="message" id="message" role="status" aria-live="polite">Reading transfer manifest...</p>
       </section>
     </main>
-    <footer><span>AES-256-GCM // Browser decryption</span><span class="footer-detail">No account required // Temporary by default</span></footer>
+    <footer><span>AES-256-GCM // Browser decryption</span><a class="project-link" href="${CFSHARE_PROJECT_URL}" target="_blank" rel="noreferrer">Powered by cfshare</a><span class="footer-detail">No account required // Temporary by default</span></footer>
   </div>
   <script>
     const $ = (id) => document.getElementById(id);

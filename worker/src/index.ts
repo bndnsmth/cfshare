@@ -1,5 +1,6 @@
 import { createLandingPage } from "../../src/site";
 import {
+  CFSHARE_PROJECT_URL,
   createContentSecurityPolicy,
   escapeHtml,
   normalizeSiteBranding,
@@ -143,7 +144,7 @@ function instanceHome(request: Request, env: Env): Response {
   <title>${brandName} node</title>
   <style>
     :root{--background:${branding.background};--foreground:${branding.foreground};--accent:${branding.accent};--muted:color-mix(in srgb,var(--foreground) 65%,var(--background));--line:color-mix(in srgb,var(--foreground) 24%,var(--background))}
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--background);color:var(--foreground);font:16px/1.6 ui-monospace,monospace}.box{width:min(720px,calc(100% - 40px));border-top:5px solid var(--accent);padding-top:30px}.brand{display:flex;align-items:center;gap:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:800}.brand img{display:block;width:auto;height:34px;max-width:140px;object-fit:contain}.brand span,h1{overflow-wrap:anywhere}h1{font:64px/1 Georgia,serif;margin:24px 0 22px}.summary{max-width:620px;color:var(--accent);font-weight:700}.detail{color:var(--muted)}code{color:var(--accent)}hr{border:0;border-top:1px solid var(--line);margin:28px 0}@media(max-width:600px){h1{font-size:46px}}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--background);color:var(--foreground);font:16px/1.6 ui-monospace,monospace}.box{width:min(720px,calc(100% - 40px));border-top:5px solid var(--accent);padding-top:30px}.brand{display:flex;align-items:center;gap:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:800}.brand img{display:block;width:auto;height:34px;max-width:140px;object-fit:contain}.brand span,h1{overflow-wrap:anywhere}h1{font:64px/1 Georgia,serif;margin:24px 0 22px}.summary{max-width:620px;color:var(--accent);font-weight:700}.detail{color:var(--muted)}code{color:var(--accent)}hr{border:0;border-top:1px solid var(--line);margin:28px 0}.project-link{color:var(--muted);font-size:12px;text-underline-offset:3px}.project-link:hover{color:var(--accent)}@media(max-width:600px){h1{font-size:46px}}
   </style>
 </head>
 <body>
@@ -155,6 +156,7 @@ function instanceHome(request: Request, env: Env): Response {
     <p><code>cfshare file.zip --server ${url.origin} --ttl ${defaultTtl}s</code></p>
     <hr>
     <p>Upload policy: ${authState}<br>Storage: streamed Durable Object SQLite<br>Health: <a href="/health" style="color:inherit">/health</a></p>
+    <a class="project-link" href="${CFSHARE_PROJECT_URL}" target="_blank" rel="noreferrer">Powered by cfshare</a>
   </main>
 </body>
 </html>`,
